@@ -1,0 +1,21 @@
+# Operating System Files
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# IDE & Editor Directories
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Temporary & Log Files
+*.log
+*.tmp
+__pycache__/
+*.pyc
+
+# Sensitive environment files
+.env
+*.local

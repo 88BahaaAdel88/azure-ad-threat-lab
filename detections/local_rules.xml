@@ -1,0 +1,121 @@
+<!--
+  azure-ad-threat-lab: Production Custom Detection Rules
+  File: /var/ossec/etc/rules/local_rules.xml
+  Project: azure-ad-threat-lab (Purple Team Detection Engineering Lab)
+  Log Sources: Windows Security Audit (4688, 4728, 4768, 4769, 4662), Sysmon (1, 10)
+  Author: Purple Team Operations & Detection Engineering
+-->
+
+<group name="active_directory,detection_engineering,">
+
+  <!-- ============================================================ -->
+  <!-- Rule 100101: Kerberoasting Detection (Event 4769 with RC4)    -->
+  <!-- MITRE ATT&CK: T1558.003 (Steal or Forge Kerberos: Kerberoasting) -->
+  <!-- ============================================================ -->
+  <rule id="100101" level="10">
+    <if_sid>60103</if_sid> <!-- Windows Security Audit Success Event -->
+    <field name="win.system.eventID">^4769$</field>
+    <field name="win.eventdata.ticketEncryptionType">^0x17$</field>
+    <field name="win.eventdata.serviceName" type="pcre2" negate="yes">.*\$</field>
+    <field name="win.eventdata.targetUserName" type="pcre2" negate="yes">.*\$</field>
+    <description>Active Directory: Potential Kerberoasting Attack (TGS Requested for Service $(win.eventdata.serviceName) with Weak RC4 Encryption 0x17)</description>
+    <mitre>
+      <id>T1558.003</id>
+    </mitre>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- Rule 100102: AS-REP Roasting Detection (Event 4768 Type 0)   -->
+  <!-- MITRE ATT&CK: T1558.004 (Steal or Forge Kerberos: AS-REP Roasting) -->
+  <!-- ============================================================ -->
+  <rule id="100102" level="10">
+    <if_sid>60103</if_sid> <!-- Windows Security Audit Success Event -->
+    <field name="win.system.eventID">^4768$</field>
+    <field name="win.eventdata.preAuthType">^0$</field>
+    <field name="win.eventdata.targetUserName" type="pcre2" negate="yes">.*\$</field>
+    <description>Active Directory: Potential AS-REP Roasting Attack (TGT Requested for $(win.eventdata.targetUserName) without Kerberos Pre-Authentication)</description>
+    <mitre>
+      <id>T1558.004</id>
+    </mitre>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- Rule 100103: Suspicious Process Execution via WinRM (4688)   -->
+  <!-- MITRE ATT&CK: T1021.006 (WinRM) / T1059 (Command & Scripting)-->
+  <!-- ============================================================ -->
+  <rule id="100103" level="10">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4688$</field>
+    <field name="win.eventdata.parentProcessName" type="pcre2">(?i)wsmprovhost\.exe$</field>
+    <field name="win.eventdata.newProcessName" type="pcre2">(?i)(whoami|net|net1|nltest|cmd|powershell|pwsh|ipconfig|systeminfo|quser|qwinsta|tasklist|reg|certutil)\.exe$</field>
+    <description>Active Directory: Suspicious Process Execution via WinRM Provider Host ($(win.eventdata.newProcessName))</description>
+    <mitre>
+      <id>T1021.006</id>
+      <id>T1059.001</id>
+      <id>T1087</id>
+    </mitre>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- Rule 100104: LSASS Process Access / Injection (Sysmon 10)    -->
+  <!-- MITRE ATT&CK: T1003.001 (OS Credential Dumping: LSASS Memory)-->
+  <!-- ============================================================ -->
+  <rule id="100104" level="12">
+    <if_sid>60000</if_sid> <!-- Sysmon generic parent -->
+    <field name="win.system.eventID">^10$</field>
+    <field name="win.eventdata.targetImage" type="pcre2">(?i)lsass\.exe$</field>
+    <field name="win.eventdata.grantedAccess" type="pcre2">(?i)(0x1010|0x1fffff|0x1410|0x1438)</field>
+    <field name="win.eventdata.sourceImage" type="pcre2" negate="yes">(?i)(csrss|services|wininit|svchost|msmpeng)\.exe$</field>
+    <description>Active Directory: Suspicious LSASS Process Access (Process: $(win.eventdata.sourceImage), GrantedAccess: $(win.eventdata.grantedAccess))</description>
+    <mitre>
+      <id>T1003.001</id>
+    </mitre>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- Rule 100105: Directory Service Replication / DCSync (4662)   -->
+  <!-- MITRE ATT&CK: T1003.006 (OS Credential Dumping: DCSync)     -->
+  <!-- ============================================================ -->
+  <rule id="100105" level="12">
+    <if_sid>60103</if_sid> <!-- Windows Security Audit Success Event -->
+    <field name="win.system.eventID">^4662$</field>
+    <field name="win.eventdata.accessMask">0x100</field>
+    <field name="win.eventdata.properties" type="pcre2">(?i)1131f6aa-9c07-11d1-f79f-00c04fc2dcd2|1131f6ad-9c07-11d1-f79f-00c04fc2dcd2|89e0becb-8182-11d0-9948-00c04fc2dcd2</field>
+    <field name="win.eventdata.subjectUserName" type="pcre2" negate="yes">.*\$</field>
+    <description>Active Directory: Directory Service Replication (DCSync) by Non-DC Account ($(win.eventdata.subjectUserName))</description>
+    <mitre>
+      <id>T1003.006</id>
+    </mitre>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- Rule 100106: Privileged Group Membership Modification (4728) -->
+  <!-- MITRE ATT&CK: T1098 (Account Manipulation)                  -->
+  <!-- ============================================================ -->
+  <rule id="100106" level="12">
+    <if_sid>60103</if_sid> <!-- Windows Security Audit Success Event -->
+    <field name="win.system.eventID">^4728$</field>
+    <field name="win.eventdata.targetUserName" type="pcre2">(?i)Domain\s+Admins|Enterprise\s+Admins|Administrators</field>
+    <description>Active Directory: Member Added to Privileged Security Group ($(win.eventdata.targetUserName)) by $(win.eventdata.subjectUserName)</description>
+    <mitre>
+      <id>T1098</id>
+    </mitre>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- Rule 100108: WMI Remote Execution Child Process (4688)       -->
+  <!-- MITRE ATT&CK: T1047 (Windows Management Instrumentation)    -->
+  <!-- ============================================================ -->
+  <rule id="100108" level="10">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4688$</field>
+    <field name="win.eventdata.parentProcessName" type="pcre2">(?i)wmiprvse\.exe$</field>
+    <field name="win.eventdata.newProcessName" type="pcre2">(?i)(cmd|powershell|pwsh|cscript|wscript|rundll32|mshta|certutil)\.exe$</field>
+    <description>Active Directory: Suspicious Process Spawning from WMI Provider Host ($(win.eventdata.newProcessName))</description>
+    <mitre>
+      <id>T1047</id>
+      <id>T1059</id>
+    </mitre>
+  </rule>
+
+</group>
